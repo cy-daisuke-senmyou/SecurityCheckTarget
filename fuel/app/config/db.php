@@ -14,6 +14,9 @@ return array(
 	'default' => array(
 		'type'        => 'pdo',
 		'connection'  => array(
+			'dsn'        => 'mysql:host=localhost;dbname=SEC_CHECK',
+			'username'   => 'user',
+			'password'   => 'password',
 			'persistent' => false,
 		),
 		'identifier'   => '`',
