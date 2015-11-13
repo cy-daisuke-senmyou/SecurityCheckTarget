@@ -5,15 +5,6 @@ class Controller_Bbs extends Controller
 {
 	public function action_index() {
 		$data['all_post'] = Bbs::get_all_post();
-
-$tmp = print_r($data,true);
-Log::debug("data = $tmp");
-/*
-		rsort($data['all_post']);
-
-$tmp = print_r($data,true);
-Log::debug("data = $tmp");
-*/
 		$view = View::forge('bbs/index');
 		$view->set('all_post', $data['all_post'], false);
 		return $view;
