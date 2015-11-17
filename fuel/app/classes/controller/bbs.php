@@ -12,7 +12,8 @@ class Controller_Bbs extends Controller
 
 	public function action_submit() {
 		$name = Input::post('name');
-		$message = Input::post('message');
+		//$message = Input::post('message');
+		$message = $_POST['message'];
 		$result = Bbs::post($name, $message);
 
 		if($result) {
