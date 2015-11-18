@@ -1,6 +1,6 @@
 <?php
-//use \Model\Bbs;
-require '/home/ec2-user/fuel/app/classes/model/bbs.php';
+use \Model\Bbs;
+//require '/home/ec2-user/fuel/app/classes/model/bbs.php';
 
 class Controller_Bbs extends Controller
 {

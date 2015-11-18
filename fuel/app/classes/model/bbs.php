@@ -1,5 +1,5 @@
 <?php
-//namespace Model;
+namespace Model;
 use Log;
 
 class Bbs extends \Model {
