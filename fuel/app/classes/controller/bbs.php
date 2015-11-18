@@ -1,10 +1,11 @@
 <?php
-use \Model\Bbs;
+//use \Model\Bbs;
+require '/home/ec2-user/fuel/app/classes/model/bbs.php';
 
 class Controller_Bbs extends Controller
 {
 	public function action_index() {
-		$data['all_post'] = $this->get_all_post();
+		$data['all_post'] = Bbs::get_all_post();
 		$view = View::forge('bbs/index');
 		$view->set('all_post', $data['all_post'], false);
 		return $view;
@@ -14,7 +15,7 @@ class Controller_Bbs extends Controller
 		$name = Input::post('name');
 		//$message = Input::post('message');
 		$message = $_POST['message'];
-		$result = $this->post($name, $message);
+		$result = Bbs::post($name, $message);
 
 		if($result) {
 			return Response::redirect('bbs/index');;
@@ -23,6 +24,7 @@ class Controller_Bbs extends Controller
 		}
 	}
 
+/*
 	private function get_all_post() {
 Log::debug("private get_all_post().");
 		$results = \DB::query('select name, message, created_at from bbs order by created_at desc')->execute();
@@ -40,5 +42,5 @@ Log::debug("private post().");
 		$result = \DB::query($sql)->execute();
 		return $result;
 	}
-
+*/
 }
