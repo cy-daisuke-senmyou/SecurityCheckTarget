@@ -5,17 +5,19 @@ require '/home/ec2-user/fuel/app/classes/model/bbs.php';
 class Controller_Bbs extends Controller
 {
 	public function action_index() {
-		$data['all_post'] = Bbs::get_all_post();
+		$bbs = new Bbs();
+		$data['all_post'] = $bbs->get_all_post();
 		$view = View::forge('bbs/index');
 		$view->set('all_post', $data['all_post'], false);
 		return $view;
 	}
 
 	public function action_submit() {
+		$bbs = new Bbs();
 		$name = Input::post('name');
 		//$message = Input::post('message');
 		$message = $_POST['message'];
-		$result = Bbs::post($name, $message);
+		$result = $bbs->post($name, $message);
 
 		if($result) {
 			return Response::redirect('bbs/index');;
