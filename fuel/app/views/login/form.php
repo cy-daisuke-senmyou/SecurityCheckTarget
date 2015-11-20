@@ -14,7 +14,7 @@
 				<form method="post" action="/login/submit">
 					<h2>Please sign in</h2>
 					<fieldset>
-						<input type="text" name="id" placeholder="ID"><br>
+						<input type="text" name="username" placeholder="UserName"><br>
 						<input type="password" name="password" placeholder="Password">
 						<label class="checkbox">
 						  <input type="checkbox" value="remember-me"> Remember me

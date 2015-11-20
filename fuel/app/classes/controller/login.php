@@ -8,11 +8,11 @@ class Controller_Login extends Controller
 	}
 
 	public function action_submit() {
-		$userid = Input::post('id');
+		$username = Input::post('username');
 		//$password = Input::post('password');
 		$password = $_POST['password'];
 
-		$result = User::check_login($userid, $password);
+		$result = User::check_login($username, $password);
 
 		if($result) {
 			return View::forge('login/success');
