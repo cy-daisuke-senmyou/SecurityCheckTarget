@@ -12,6 +12,7 @@ class Controller_Login extends Controller
 		//$password = Input::post('password');
 		$password = $_POST['password'];
 
+		// 独自認証方式
 		$result = User::check_login($username, $password);
 
 		if($result) {

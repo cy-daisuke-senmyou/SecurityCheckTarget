@@ -20,20 +20,29 @@ class Create_user {
 			'username' => array('constraint' => 50, 'type' => 'varchar', 'unique' => true),
 			'password' => array('constraint' => 255, 'type' => 'varchar'),
 			'group' => array('constraint' => 11, 'type' => 'int', 'default' => 1),
-			'email' => array('constraint' => 255, 'type' => 'varchar', 'null' => true, 'unique' => true),
-			'last_login' => array('constraint' => 25, 'type' => 'varchar', 'null' => true),
-			'login_hash' => array('constraint' => 255, 'type' => 'varchar', 'null' => true),
+			'email' => array('constraint' => 255, 'type' => 'varchar', 'unique' => true),
+			'last_login' => array('constraint' => 25, 'type' => 'varchar'),
+			'login_hash' => array('constraint' => 255, 'type' => 'varchar'),
+			'profile_fields' => array('type' => 'text'),
 			'created_at' => array('constraint' => 11, 'type' => 'int'),
 			'updated_at' => array('constraint' => 11, 'type' => 'int'),
 		), array('id'));
 
+		// Authパッケージ認証用ユーザー
 		\DB::insert('users')->set(array(
 			'username' => 'daisuke_senmyou',
-			'password' => 'password',
+			'password' => 'iRaqtv15Xv0sPoDFYUoimjdZOkReEu1f1T+IQ6Wbtgo=',
 			'created_at' => time(),
 			'updated_at' => time(),
 		))->execute();
 
+		// 独自認証用ユーザー
+		\DB::insert('users')->set(array(
+			'username' => 'plain_text_user',
+			'password' => 'password',
+			'created_at' => time(),
+			'updated_at' => time(),
+		))->execute();
 	}
 
 	public function down()
