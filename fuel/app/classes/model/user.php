@@ -6,7 +6,7 @@ class User extends \Model {
 	public static function check_login($username, $password) {
 		$result = \DB::query("SELECT * FROM users where username = '$username' and password = '$password'")->execute();
 		$result_array = $result->as_array();
-		if(count($result_array) === 1 && is_numeric($result_array[0]['id'])) {
+		if(count($result_array) >= 1 && is_numeric($result_array[0]['id'])) {
 			return true;
 		} else {
 			return false;
