@@ -7,8 +7,8 @@ class Controller_Fileview extends Controller
 	}
 
 	public function action_submit() {
-		//$filename = Input::post('filename');
-		$filename = $_POST['filename'];
+		$filename = Input::post('filename');
+		//$filename = $_POST['filename'];
 		$path = '/home/ec2-user/public/file/' . $filename;
 		$command = "cat $path";
 		$data['file'] = shell_exec($command);

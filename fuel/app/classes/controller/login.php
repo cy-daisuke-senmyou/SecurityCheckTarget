@@ -9,8 +9,8 @@ class Controller_Login extends Controller
 
 	public function action_submit() {
 		$username = Input::post('username');
-		//$password = Input::post('password');
-		$password = $_POST['password'];
+		$password = Input::post('password');
+		//$password = $_POST['password'];
 
 		// 独自認証方式
 		$result = User::check_login($username, $password);
