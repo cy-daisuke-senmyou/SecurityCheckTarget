@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -85,8 +85,10 @@ class File_Area
 		{
 			$info = pathinfo($path);
 
+			// deal with path names without an extension
+			isset($info['extension']) or $info['extension'] = '';
+
 			// check file extension
-			$info = pathinfo($path);
 			if ( ! empty($this->extensions) && ! in_array($info['extension'], $this->extensions))
 			{
 				throw new \FileAccessException('File operation not allowed: disallowed file extension.');
@@ -139,8 +141,10 @@ class File_Area
 	 */
 	public function get_path($path)
 	{
-
 		$pathinfo = is_dir($path) ? array('dirname' => $path, 'extension' => null, 'basename' => '') : pathinfo($path);
+
+		// make sure we have a dirname to work with
+		isset($pathinfo['dirname']) or $pathinfo['dirname'] = '';
 
 		// do we have a basedir, and is the path already prefixed by the basedir? then just deal with the double dots...
 		if ( ! empty($this->basedir) && substr($pathinfo['dirname'], 0, strlen($this->basedir)) == $this->basedir)
@@ -248,7 +252,7 @@ class File_Area
 
 	public function delete_dir($path, $recursive = true, $delete_top = true)
 	{
-		return \File::delete($path, $recursive, $delete_top, $this);
+		return \File::delete_dir($path, $recursive, $delete_top, $this);
 	}
 
 	public function update($basepath, $name, $new_content)

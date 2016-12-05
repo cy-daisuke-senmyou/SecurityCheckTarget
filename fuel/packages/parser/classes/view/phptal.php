@@ -5,10 +5,10 @@
  * Fuel is a fast, lightweight, community driven PHP5 framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -56,7 +56,7 @@ class View_Phptal extends \View
 		static::$_parser->setTemplateRepository(\Config::get('parser.View_Phptal.template_repository', ''));
 		static::$_parser->setPhpCodeDestination(\Config::get('parser.View_Phptal.cache_dir', APPPATH.'cache'.DS.'PHPTAL'.DS));
 		static::$_parser->setCacheLifetime(\Config::get('parser.View_Phptal.cache_lifetime', 0));
-		static::$_parser->setForceReparse(\Config::get('parser.View_Phptal.encoding', false));
+		static::$_parser->setForceReparse(\Config::get('parser.View_Phptal.force_reparse', false));
 
 		return static::$_parser;
 	}

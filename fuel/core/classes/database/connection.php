@@ -17,12 +17,6 @@ namespace Fuel\Core;
 
 abstract class Database_Connection
 {
-
-	/**
-	 * @var  string  default instance name
-	 */
-	public static $default = 'default';
-
 	/**
 	 * @var  array  Database instances
 	 */
@@ -625,6 +619,11 @@ abstract class Database_Connection
 			// Quote the column in FUNC("ident") identifiers
 			return preg_replace('/"(.+?)"/e', '$this->quote_identifier("$1")', $value);
 		}
+		elseif (preg_match("/^'(.*)?'$/", $value))
+		{
+			// return quoted values as-is
+			return $value;
+		}
 		elseif (strpos($value, '.') !== false)
 		{
 			// Split the identifier into the individual parts
@@ -662,6 +661,8 @@ abstract class Database_Connection
 
 	/**
 	 * Whether or not the connection is in transaction mode
+	 *
+	 *     $db->in_transaction();
 	 *
 	 * @return  bool
 	 */

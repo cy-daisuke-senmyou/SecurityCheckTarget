@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -37,6 +37,58 @@ class Test_Arr extends TestCase
 				),
 			),
 		);
+	}
+
+	public static function collection_provider()
+	{
+		$object = new \stdClass;
+		$object->id = 7;
+		$object->name = 'Bert';
+		$object->surname = 'Visser';
+
+		return array(
+			array(
+				array(
+					array(
+						'id' => 2,
+						'name' => 'Bill',
+						'surname' => 'Cosby',
+					),
+					array(
+						'id' => 5,
+						'name' => 'Chris',
+						'surname' => 'Rock',
+					),
+					$object,
+				),
+			),
+		);
+	}
+
+	/**
+	 * Test Arr::pluck()
+	 *
+	 * @test
+	 * @dataProvider collection_provider
+	 */
+	public function test_pluck($collection)
+	{
+		$output = \Arr::pluck($collection, 'id');
+		$expected = array(2, 5, 7);
+		$this->assertEquals($expected, $output);
+	}
+
+	/**
+	 * Test Arr::pluck()
+	 *
+	 * @test
+	 * @dataProvider collection_provider
+	 */
+	public function test_pluck_with_index($collection)
+	{
+		$output = \Arr::pluck($collection, 'name', 'id');
+		$expected = array(2 => 'Bill', 5 => 'Chris', 7 => 'Bert');
+		$this->assertEquals($expected, $output);
 	}
 
 	/**
@@ -385,7 +437,7 @@ class Test_Arr extends TestCase
 	{
 		$arr = array('foo' => 'baz', 'prefix_bar' => 'yay');
 
-		$output = Arr::filter_prefixed($arr);
+		$output = Arr::filter_prefixed($arr, 'prefix_');
 		$this->assertEquals(array('bar' => 'yay'), $output);
 	}
 
@@ -465,7 +517,7 @@ class Test_Arr extends TestCase
 	 */
 	public function test_sort_asc($data, $expected)
 	{
-		$this->assertEquals(Arr::sort($data, 'info.pet.type', 'asc'), $expected);
+		$this->assertEquals($expected, Arr::sort($data, 'info.pet.type', 'asc'));
 	}
 
 	/**
@@ -477,7 +529,7 @@ class Test_Arr extends TestCase
 	public function test_sort_desc($data, $expected)
 	{
 		$expected = array_reverse($expected);
-		$this->assertEquals(Arr::sort($data, 'info.pet.type', 'desc'), $expected);
+		$this->assertEquals($expected, Arr::sort($data, 'info.pet.type', 'desc'));
 	}
 
 	/**
@@ -489,7 +541,7 @@ class Test_Arr extends TestCase
 	 */
 	public function test_sort_invalid_direction($data, $expected)
 	{
-		$this->assertEquals(Arr::sort($data, 'info.pet.type', 'downer'), $expected);
+		$this->assertEquals($expected, Arr::sort($data, 'info.pet.type', 'downer'));
 	}
 
 	public function test_sort_empty()
@@ -519,8 +571,8 @@ class Test_Arr extends TestCase
 			'weak' => 'sauce',
 		);
 		$keys = array('epic', 'foo');
-		$this->assertEquals(Arr::filter_keys($data, $keys), $expected);
-		$this->assertEquals(Arr::filter_keys($data, $keys, true), $expected_remove);
+		$this->assertEquals($expected, Arr::filter_keys($data, $keys));
+		$this->assertEquals($expected_remove, Arr::filter_keys($data, $keys, true));
 	}
 
 	/**
@@ -607,6 +659,241 @@ class Test_Arr extends TestCase
 		$this->assertTrue(Arr::is_multi($arr_multi_strange, false));
 		$this->assertFalse(Arr::is_multi($arr_multi_strange, true));
 	}
+
+	/**
+	 * Tests Arr::search()
+	 *
+	 * @test
+	 */
+	public function test_search_single_array()
+	{
+		// Single array
+		$arr_single = array('one' => 1, 'two' => 2);
+		$expected = 'one';
+		$this->assertEquals($expected, Arr::search($arr_single, 1));
+
+		// Default
+		$expected = null;
+		$this->assertEquals($expected, Arr::search($arr_single, 3));
+		$expected = 'three';
+		$this->assertEquals($expected, Arr::search($arr_single, 3, 'three'));
+
+		// Single array (int key)
+		$arr_single = array(0 => 'zero', 'one' => 1, 'two' => 2);
+		$expected = 0;
+		$this->assertEquals($expected, Arr::search($arr_single, 0));
+	}
+
+	/**
+	 * Tests Arr::search()
+	 *
+	 * @test
+	 */
+	public function test_search_multi_array()
+	{
+		// Multi-dimensional array
+		$arr_multi = array('one' => array('test' => 1), 'two' => array('test' => 2), 'three' => array('test' => array('a' => 'a', 'b' => 'b')));
+		$expected = 'one';
+		$this->assertEquals($expected, Arr::search($arr_multi, array('test' => 1), null, false));
+		$expected = null;
+		$this->assertEquals($expected, Arr::search($arr_multi, 1, null, false));
+
+		// Multi-dimensional array (recursive)
+		$expected = 'one.test';
+		$this->assertEquals($expected, Arr::search($arr_multi, 1));
+
+		$expected = 'three.test.b';
+		$this->assertEquals($expected, Arr::search($arr_multi, 'b', null, true));
+	}
+
+
+	/**
+	 * Tests Arr::sum()
+	 *
+	 * @test
+	 */
+	public function test_sum_multi_array()
+	{
+		$arr_multi = array(
+			array(
+				'name' => 'foo',
+				'scores' => array(
+					'sports' => 5,
+					'math' => 20,
+				),
+			),
+			array(
+				'name' => 'bar',
+				'scores' => array(
+					'sports' => 7,
+					'math' => 15,
+				),
+			),
+			array(
+				'name' => 'fuel',
+				'scores' => array(
+					'sports' => 8,
+					'math' => 5,
+				),
+			),
+			array(
+				'name' => 'php',
+				'scores' => array(
+					'math' => 10,
+				),
+			),
+		);
+
+		$expected = 50;
+		$test = \Arr::sum($arr_multi, 'scores.math');
+		$this->assertEquals($expected, $test);
+
+		$expected = 20;
+		$test = \Arr::sum($arr_multi, 'scores.sports');
+		$this->assertEquals($expected, $test);
+	}
+
+	/**
+	 * Tests Arr::previous_by_key()
+	 *
+	 * @test
+	 */
+	public function test_previous_by_key()
+	{
+		// our test array
+		$arr = array(2 => 'A', 4 => 'B', 6 => 'C');
+
+		// test: key not found in array
+		$expected = false;
+		$test = \Arr::previous_by_key($arr, 1);
+		$this->assertTrue($expected === $test);
+
+		// test: no previous key
+		$expected = null;
+		$test = \Arr::previous_by_key($arr, 2);
+		$this->assertTrue($expected === $test);
+
+		// test: strict key comparison
+		$expected = false;
+		$test = \Arr::previous_by_key($arr, '2', false, true);
+		$this->assertTrue($expected === $test);
+
+		// test: get previous key
+		$expected = 2;
+		$test = \Arr::previous_by_key($arr, 4);
+		$this->assertTrue($expected === $test);
+
+		// test: get previous value
+		$expected = 'A';
+		$test = \Arr::previous_by_key($arr, 4, true);
+		$this->assertTrue($expected === $test);
+	}
+
+	/**
+	 * Tests Arr::next_by_key()
+	 *
+	 * @test
+	 */
+	public function test_next_by_key()
+	{
+		// our test array
+		$arr = array(2 => 'A', 4 => 'B', 6 => 'C');
+
+		// test: key not found in array
+		$expected = false;
+		$test = \Arr::next_by_key($arr, 1);
+		$this->assertTrue($expected === $test);
+
+		// test: no next key
+		$expected = null;
+		$test = \Arr::next_by_key($arr, 6);
+		$this->assertTrue($expected === $test);
+
+		// test: strict key comparison
+		$expected = false;
+		$test = \Arr::next_by_key($arr, '6', false, true);
+		$this->assertTrue($expected === $test);
+
+		// test: get next key
+		$expected = 6;
+		$test = \Arr::next_by_key($arr, 4);
+		$this->assertTrue($expected === $test);
+
+		// test: get next value
+		$expected = 'C';
+		$test = \Arr::next_by_key($arr, 4, true);
+		$this->assertTrue($expected === $test);
+	}
+
+	/**
+	 * Tests Arr::previous_by_value()
+	 *
+	 * @test
+	 */
+	public function test_previous_by_value()
+	{
+		// our test array
+		$arr = array(2 => 'A', 4 => '2', 6 => 'C');
+
+		// test: value not found in array
+		$expected = false;
+		$test = \Arr::previous_by_value($arr, 'Z');
+		$this->assertTrue($expected === $test);
+
+		// test: no previous value
+		$expected = null;
+		$test = \Arr::previous_by_value($arr, 'A');
+		$this->assertTrue($expected === $test);
+
+		// test: strict value comparison
+		$expected = false;
+		$test = \Arr::previous_by_value($arr, 2, true, true);
+		$this->assertTrue($expected === $test);
+
+		// test: get previous value
+		$expected = 'A';
+		$test = \Arr::previous_by_value($arr, '2');
+		$this->assertTrue($expected === $test);
+
+		// test: get previous key
+		$expected = 4;
+		$test = \Arr::previous_by_value($arr, 'C', false);
+		$this->assertTrue($expected === $test);
+	}
+
+	/**
+	 * Tests Arr::next_by_value()
+	 *
+	 * @test
+	 */
+	public function test_next_by_value()
+	{
+		// our test array
+		$arr = array(2 => 'A', 4 => '2', 6 => 'C');
+
+		// test: value not found in array
+		$expected = false;
+		$test = \Arr::next_by_value($arr, 'Z');
+		$this->assertTrue($expected === $test);
+
+		// test: no next value
+		$expected = null;
+		$test = \Arr::next_by_value($arr, 'C');
+		$this->assertTrue($expected === $test);
+
+		// test: strict value comparison
+		$expected = false;
+		$test = \Arr::next_by_value($arr, 2, true, true);
+		$this->assertTrue($expected === $test);
+
+		// test: get next value
+		$expected = 'C';
+		$test = \Arr::next_by_value($arr, '2');
+		$this->assertTrue($expected === $test);
+
+		// test: get next key
+		$expected = 4;
+		$test = \Arr::next_by_value($arr, 'A', false);
+		$this->assertTrue($expected === $test);
+	}
 }
-
-

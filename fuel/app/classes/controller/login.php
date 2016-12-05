@@ -8,12 +8,20 @@ class Controller_Login extends Controller
 	}
 
 	public function action_submit() {
-		$username = Input::post('username');
+		$userid = Input::post('userid');
 		$password = Input::post('password');
 		//$password = $_POST['password'];
 
+		// ORM
+		// $result = User::find('first', array(
+		//     'where' => array(
+		//         array('id', $userid),
+		// 		array('password', $password)
+		//     ),
+		// ));
+		
 		// 独自認証方式
-		$result = User::check_login($username, $password);
+		$result = User::check_login($userid, $password);
 
 		if($result) {
 			return View::forge('login/success');

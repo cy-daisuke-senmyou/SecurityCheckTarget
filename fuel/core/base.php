@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -36,15 +36,59 @@ if ( ! function_exists('logger'))
 {
 	function logger($level, $msg, $method = null)
 	{
-		if ($level > \Config::get('log_threshold'))
+		static $labels = array(
+			100 => 'DEBUG',
+			200 => 'INFO',
+			250 => 'NOTICE',
+			300 => 'WARNING',
+			400 => 'ERROR',
+			500 => 'CRITICAL',
+			550 => 'ALERT',
+			600 => 'EMERGENCY',
+			700 => 'ALL',
+		);
+
+		// make sure $level has the correct value
+		if ((is_int($level) and ! isset($labels[$level])) or (is_string($level) and ! array_search(strtoupper($level), $labels)))
+		{
+			throw new \FuelException('Invalid level "'.$level.'" passed to logger()');
+		}
+
+		if(is_string($level))	$level = array_search(strtoupper($level), $labels);
+
+		// get the levels defined to be logged
+		$loglabels = \Config::get('log_threshold');
+
+		// bail out if we don't need logging at all
+		if ($loglabels == \Fuel::L_NONE)
 		{
 			return false;
 		}
 
-		! class_exists('Fuel\\Core\\Log') and import('log');
-		! class_exists('Log') and class_alias('Fuel\\Core\\Log', 'Log');
+		// if profiling is active log the message to the profile
+		if (\Config::get('profiling'))
+		{
+			\Console::log($method.' - '.$msg);
+		}
 
-		return \Log::write($level, $msg, $method);
+		// if it's not an array, assume it's an "up to" level
+		if ( ! is_array($loglabels))
+		{
+			$a = array();
+			foreach ($labels as $l => $label)
+			{
+				$l >= $loglabels and $a[] = $l;
+			}
+			$loglabels = $a;
+		}
+
+		// do we need to log the message with this level?
+		if ( ! in_array($level, $loglabels))
+		{
+			return false;
+		}
+
+		return \Log::instance()->log($level, (empty($method) ? '' : $method.' - ').$msg);
 	}
 }
 
@@ -61,15 +105,10 @@ if ( ! function_exists('array_to_attr'))
 	{
 		$attr_str = '';
 
-		if ( ! is_array($attr))
+		foreach ((array) $attr as $property => $value)
 		{
-			$attr = (array) $attr;
-		}
-
-		foreach ($attr as $property => $value)
-		{
-			// Ignore null values
-			if (is_null($value))
+			// Ignore null/false
+			if ($value === null or $value === false)
 			{
 				continue;
 			}
@@ -165,9 +204,9 @@ if ( ! function_exists('render'))
  */
 if ( ! function_exists('__'))
 {
-	function __($string, $params = array(), $default = null)
+	function __($string, $params = array(), $default = null, $language = null)
 	{
-		return \Lang::get($string, $params, $default);
+		return \Lang::get($string, $params, $default, $language);
 	}
 }
 
@@ -323,27 +362,5 @@ if (!function_exists('http_build_url'))
 			.((isset($parse_url['query'])) ? '?' . $parse_url['query'] : '')
 			.((isset($parse_url['fragment'])) ? '#' . $parse_url['fragment'] : '')
 		;
-	}
-}
-
-/**
- * Loads in the classes used for the error handlers.  The class_exists() calls
- * will trigger the autoloader if it is loaded, if not, then it will import
- * the classes and do the work itself.
- *
- * @return  void
- */
-if ( ! function_exists('load_error_classes'))
-{
-	function load_error_classes()
-	{
-		class_exists('Fuel\\Core\\Error') or import('error');
-		class_exists('Error') or class_alias('Fuel\\Core\\Error', 'Error');
-
-		class_exists('Fuel\\Core\\Debug') or import('debug');
-		class_exists('Debug') or class_alias('Fuel\\Core\\Debug', 'Debug');
-
-		class_exists('Fuel\\Core\\View') or import('view');
-		class_exists('View') or class_alias('Fuel\\Core\\View', 'View');
 	}
 }

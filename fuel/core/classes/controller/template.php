@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -51,17 +51,9 @@ abstract class Controller_Template extends \Controller
 	public function after($response)
 	{
 		// If nothing was returned default to the template
-		if (empty($response))
+		if ($response === null)
 		{
 			$response = $this->template;
-		}
-
-		// If the response isn't a Response object, embed in the available one for BC
-		// @deprecated  can be removed when $this->response is removed
-		if ( ! $response instanceof Response)
-		{
-			$this->response->body = $response;
-			$response = $this->response;
 		}
 
 		return parent::after($response);

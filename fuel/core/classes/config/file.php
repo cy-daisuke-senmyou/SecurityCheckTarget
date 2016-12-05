@@ -36,9 +36,9 @@ abstract class Config_File implements Config_Interface
 	 * @param   bool  $overwrite  Whether to overwrite existing values
 	 * @return  array  the config array
 	 */
-	public function load($overwrite = false)
+	public function load($overwrite = false, $cache = true)
 	{
-		$paths = $this->find_file();
+		$paths = $this->find_file($cache);
 		$config = array();
 
 		foreach ($paths as $path)
@@ -115,35 +115,35 @@ abstract class Config_File implements Config_Interface
 	 * @param   bool  $multiple  Whether to load multiple files or not
 	 * @return  array
 	 */
-	protected function find_file()
+	protected function find_file($cache = true)
 	{
-		$paths = \Finder::search('config', $this->file, $this->ext, true);
-
-		// absolute path requested?
-		if ($this->file[0] === '/' or (isset($this->file[1]) and $this->file[1] === ':'))
+		if (($this->file[0] === '/' or (isset($this->file[1]) and $this->file[1] === ':')) and is_file($this->file))
 		{
-			// don't search further, load only the requested file
-			return $paths;
+			$paths = array($this->file);
+		}
+		else
+		{
+			$paths = array_merge(
+				\Finder::search('config/'.\Fuel::$env, $this->file, $this->ext, true, $cache),
+				\Finder::search('config', $this->file, $this->ext, true, $cache)
+			);
 		}
 
-		$paths = array_merge(\Finder::search('config/'.\Fuel::$env, $this->file, $this->ext, true), $paths);
-
-		if (count($paths) > 0)
+		if (empty($paths))
 		{
-			return array_reverse($paths);
+			throw new \ConfigException(sprintf('File "%s" does not exist.', $this->file));
 		}
 
-		throw new \ConfigException(sprintf('File "%s" does not exist.', $this->file));
+		return array_reverse($paths);
 	}
 
 	/**
 	 * Formats the output and saved it to disc.
 	 *
-	 * @param   string     $identifier  filename
 	 * @param   $contents  $contents    config array to save
 	 * @return  bool       \File::update result
 	 */
-	public function save($identifier, $contents)
+	public function save($contents)
 	{
 		// get the formatted output
 		$output = $this->export_format($contents);
@@ -153,18 +153,18 @@ abstract class Config_File implements Config_Interface
 			return false;
 		}
 
-		if ( ! $path = \Finder::search('config', $identifier))
+		if ( ! $path = \Finder::search('config', $this->file, $this->ext))
 		{
-			if ($pos = strripos($identifier, '::'))
+			if ($pos = strripos($this->file, '::'))
 			{
 				// get the namespace path
-				if ($path = \Autoloader::namespace_path('\\'.ucfirst(substr($identifier, 0, $pos))))
+				if ($path = \Autoloader::namespace_path('\\'.ucfirst(substr($this->file, 0, $pos))))
 				{
 					// strip the namespace from the filename
-					$identifier = substr($identifier, $pos+2);
+					$this->file = substr($this->file, $pos+2);
 
 					// strip the classes directory as we need the module root
-					$path = substr($path,0, -8).'config'.DS.$identifier;
+					$path = substr($path,0, -8).'config'.DS.$this->file;
 				}
 				else
 				{
@@ -175,13 +175,13 @@ abstract class Config_File implements Config_Interface
 		}
 
 		// absolute path requested?
-		if ($identifier[0] === '/' or (isset($identifier[1]) and $identifier[1] === ':'))
+		if ($this->file[0] === '/' or (isset($this->file[1]) and $this->file[1] === ':'))
 		{
-			$path = $identifier;
+			$path = $this->file;
 		}
 
 		// make sure we have a fallback
-		$path or $path = APPPATH.'config'.DS.$identifier;
+		$path or $path = APPPATH.'config'.DS.$this->file.$this->ext;
 
 		$path = pathinfo($path);
 		if ( ! is_dir($path['dirname']))

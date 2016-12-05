@@ -3,17 +3,14 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
 namespace Fuel\Core;
-
-import('phpseclib/Crypt/AES', 'vendor');
-import('phpseclib/Crypt/Hash', 'vendor');
 
 use \PHPSecLib\Crypt_AES;
 use \PHPSecLib\Crypt_Hash;
@@ -73,9 +70,13 @@ class Crypt
 		// update the config if needed
 		if ($update === true)
 		{
+			// load the file config
+			\Config::load('file', true);
+
 			try
 			{
 				\Config::save('crypt', static::$config);
+				chmod(APPPATH.'config'.DS.'crypt.php', \Config::get('file.chmod.files', 0666));
 			}
 			catch (\FileAccessException $e)
 			{

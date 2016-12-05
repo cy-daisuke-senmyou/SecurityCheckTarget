@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -37,6 +37,11 @@ class Migrate
 	protected static $table = 'migration';
 
 	/**
+	 * @var string  database connection group
+	 */
+	protected static $connection = null;
+
+	/**
 	 * @var	array	migration table schema
 	 */
 	protected static $table_definition = array(
@@ -62,6 +67,9 @@ class Migrate
 		// set the name of the table containing the installed migrations
 		static::$table = \Config::get('migrations.table', static::$table);
 
+		// set the name of the connection group to use
+		static::$connection = \Config::get('migrations.connection', static::$connection);
+
 		// installs or upgrades the migration table to the current schema
 		static::table_version_check();
 
@@ -71,7 +79,7 @@ class Migrate
 			->order_by('type', 'ASC')
 			->order_by('name', 'ASC')
 			->order_by('migration', 'ASC')
-			->execute()
+			->execute(static::$connection)
 			->as_array();
 
 		// convert the db migrations to match the config file structure
@@ -83,19 +91,20 @@ class Migrate
 	}
 
 	/**
-	 * migrate to a specific version or range of versions
+	 * migrate to a specific version, range of versions, or all
 	 *
 	 * @param   mixed	version to migrate to (up or down!)
 	 * @param   string  name of the package, module or app
 	 * @param   string  type of migration (package, module or app)
+	 * @param	bool	if true, also run out-of-sequence migrations
 	 *
 	 * @throws	UnexpectedValueException
 	 * @return	array
 	 */
-	public static function version($version = null, $name = 'default', $type = 'app')
+	public static function version($version = null, $name = 'default', $type = 'app', $all = false)
 	{
 		// get the current version from the config
-		$current = \Config::get('migrations.version.'.$type.'.'.$name);
+		$all or $current = \Config::get('migrations.version.'.$type.'.'.$name);
 
 		// any migrations defined?
 		if ( ! empty($current))
@@ -137,13 +146,14 @@ class Migrate
 	 *
 	 * @param   string  name of the package, module or app
 	 * @param   string  type of migration (package, module or app)
+	 * @param	bool	if true, also run out-of-sequence migrations
 	 *
 	 * @return	array
 	 */
-	public static function latest($name = 'default', $type = 'app')
+	public static function latest($name = 'default', $type = 'app', $all = false)
 	{
-		// equivalent to from current version to latest
-		return static::version(null, $name, $type);
+		// equivalent to from current version (or all) to latest
+		return static::version(null, $name, $type, $all);
 	}
 
 	/**
@@ -188,24 +198,20 @@ class Migrate
 		// get the current version info from the config
 		$current = \Config::get('migrations.version.'.$type.'.'.$name);
 
-		// any migrations defined?
-		if ( ! empty($current))
+		// get the last migration installed
+		$current = empty($current) ? null : end($current);
+
+		// get the available migrations after the current one
+		$migrations = static::find_migrations($name, $type, $current, $version);
+
+		// found any?
+		if ( ! empty($migrations))
 		{
-			// get the last entry
-			$current = end($current);
+			// if no version was given, only install the next migration
+			is_null($version) and $migrations = array(reset($migrations));
 
-			// get the available migrations after the current one
-			$migrations = static::find_migrations($name, $type, $current, $version);
-
-			// found any?
-			if ( ! empty($migrations))
-			{
-				// if no version was given, only install the next migration
-				is_null($version) and $migrations = array(reset($migrations));
-
-				// install migrations found
-				return static::run($migrations, $name, $type, 'up');
-			}
+			// install migrations found
+			return static::run($migrations, $name, $type, 'up');
 		}
 
 		// nothing to migrate
@@ -268,15 +274,25 @@ class Migrate
 		// storage for installed migrations
 		$done = array();
 
+		static::$connection === null or \DBUtil::set_connection(static::$connection);
+
 		// Loop through the runnable migrations and run them
 		foreach ($migrations as $ver => $migration)
 		{
 			logger(Fuel::L_INFO, 'Migrating to version: '.$ver);
-			call_user_func(array(new $migration['class'], $method));
+			$result = call_user_func(array(new $migration['class'], $method));
+			if ($result === false)
+			{
+				logger(Fuel::L_INFO, 'Skipped migration to '.$ver.'.');
+				return $done;
+			}
+
 			$file = basename($migration['path'], '.php');
 			$method == 'up' ? static::write_install($name, $type, $file) : static::write_revert($name, $type, $file);
 			$done[] = $file;
 		}
+
+		static::$connection === null or \DBUtil::set_connection(null);
 
 		empty($done) or logger(Fuel::L_INFO, 'Migrated to '.$ver.' successfully.');
 
@@ -300,7 +316,7 @@ class Migrate
 			'name' => $name,
 			'type' => $type,
 			'migration' => $file,
-		))->execute();
+		))->execute(static::$connection);
 
 		// add the file to the list of run migrations
 		static::$migrations[$type][$name][] = $file;
@@ -329,7 +345,7 @@ class Migrate
 			->where('name', $name)
 			->where('type', $type)
 			->where('migration', $file)
-		->execute();
+		->execute(static::$connection);
 
 		// remove the file from the list of run migrations
 		if (($key = array_search($file, static::$migrations[$type][$name])) !== false)
@@ -423,17 +439,17 @@ class Migrate
 				$class_name = ucfirst(strtolower($match[1]));
 
 				// load the file and determiine the classname
-				include $migration['path'];
+				include_once $migration['path'];
 				$class = static::$prefix.$class_name;
 
 				// make sure it exists in the migration file loaded
 				if ( ! class_exists($class, false))
 				{
-					throw new FuelException(sprintf('Migration "%s" does not contain expected class "%s"', $file, $class));
+					throw new FuelException(sprintf('Migration "%s" does not contain expected class "%s"', $migration['path'], $class));
 				}
 
 				// and that it contains an "up" and "down" method
-				if ( ! is_callable(array($class, 'up')) || ! is_callable(array($class, 'down')))
+				if ( ! is_callable(array($class, 'up')) or ! is_callable(array($class, 'down')))
 				{
 					throw new FuelException(sprintf('Migration class "%s" must include public methods "up" and "down"', $name));
 				}
@@ -442,7 +458,7 @@ class Migrate
 			}
 			else
 			{
-				throw new FuelException(sprintf('Invalid Migration filename "%s"', $file));
+				throw new FuelException(sprintf('Invalid Migration filename "%s"', $migration['path']));
 			}
 		}
 
@@ -461,7 +477,15 @@ class Migrate
 	 */
 	protected static function _find_app($name = null)
 	{
-		return glob(APPPATH.\Config::get('migrations.folder').'*_*.php');
+		$found = array();
+
+		$files = new \GlobIterator(APPPATH.\Config::get('migrations.folder').'*_*.php');
+		foreach($files as $file)
+		{
+			$found[] = $file->getPathname();
+		}
+
+		return $found;
 	}
 
 	/**
@@ -473,14 +497,20 @@ class Migrate
 	 */
 	protected static function _find_module($name = null)
 	{
+		$files = array();
+
 		if ($name)
 		{
 			// find a module
 			foreach (\Config::get('module_paths') as $m)
 			{
-				$files = glob($m .$name.'/'.\Config::get('migrations.folder').'*_*.php');
-				if (count($files))
+				$found = new \GlobIterator($m.$name.DS.\Config::get('migrations.folder').'*_*.php');
+				if (count($found))
 				{
+					foreach($found as $file)
+					{
+						$files[] = $file->getPathname();
+					}
 					break;
 				}
 			}
@@ -488,10 +518,13 @@ class Migrate
 		else
 		{
 			// find all modules
-			$files = array();
 			foreach (\Config::get('module_paths') as $m)
 			{
-				$files = array_merge($files, glob($m.'*/'.\Config::get('migrations.folder').'*_*.php'));
+				$found = new \GlobIterator($m.'*'.DS.\Config::get('migrations.folder').'*_*.php');
+				foreach($found as $file)
+				{
+					$files[] = $file->getPathname();
+				}
 			}
 		}
 
@@ -507,15 +540,35 @@ class Migrate
 	 */
 	protected static function _find_package($name = null)
 	{
+		$files = array();
+
 		if ($name)
 		{
 			// find a package
-			$files = glob(PKGPATH.$name.'/'.\Config::get('migrations.folder').'*_*.php');
+			foreach (\Config::get('package_paths', array(PKGPATH)) as $p)
+			{
+				$found = new \GlobIterator($p.$name.DS.\Config::get('migrations.folder').'*_*.php');
+				if (count($found))
+				{
+					foreach($found as $file)
+					{
+						$files[] = $file->getPathname();
+					}
+					break;
+				}
+			}
 		}
 		else
 		{
 			// find all packages
-			$files = glob(PKGPATH.'*/'.\Config::get('migrations.folder').'*_*.php');
+			foreach (\Config::get('package_paths', array(PKGPATH)) as $p)
+			{
+				$found = new \GlobIterator($p.'*'.DS.\Config::get('migrations.folder').'*_*.php');
+				foreach($found as $file)
+				{
+					$files[] = $file->getPathname();
+				}
+			}
 		}
 
 		return $files;
@@ -526,10 +579,13 @@ class Migrate
 	 *
 	 * @return	void
 	 *
-	 * @deprecated	Remove upgrade check in 1.3
+	 * @deprecated	Remove upgrade check in 1.4
 	 */
 	protected static function table_version_check()
 	{
+		// set connection
+		static::$connection === null or \DBUtil::set_connection(static::$connection);
+
 		// if table does not exist
 		if ( ! \DBUtil::table_exists(static::$table))
 		{
@@ -541,7 +597,7 @@ class Migrate
 		elseif ( ! \DBUtil::field_exists(static::$table, array('migration')))
 		{
 			// get the current migration status
-			$current = \DB::select()->from(static::$table)->order_by('type', 'ASC')->order_by('name', 'ASC')->execute()->as_array();
+			$current = \DB::select()->from(static::$table)->order_by('type', 'ASC')->order_by('name', 'ASC')->execute(static::$connection)->as_array();
 
 			// drop the existing table, and recreate it in the new layout
 			\DBUtil::drop_table(static::$table);
@@ -564,7 +620,7 @@ class Migrate
 				foreach ($current as $migration)
 				{
 					// find the migrations for this entry
-					$migrations = static::find_migrations($migration['name'], $migration['type'], 0, $migration['version']);
+					$migrations = static::find_migrations($migration['name'], $migration['type'], null, $migration['version']);
 
 					// array to keep track of the migrations already run
 					$config = array();
@@ -579,7 +635,7 @@ class Migrate
 							'name' => $migration['name'],
 							'type' => $migration['type'],
 							'migration' => $file['filename'],
-						))->execute();
+						))->execute(static::$connection);
 
 						// and to the config
 						$config[] = $file['filename'];
@@ -594,6 +650,12 @@ class Migrate
 				\Config::set('migrations.version', $configs);
 				\Config::save(\Fuel::$env.DS.'migrations', 'migrations');
 			}
+
+			// delete any old migration config file that may exist
+			file_exists(APPPATH.'config'.DS.'migrations.php') and unlink(APPPATH.'config'.DS.'migrations.php');
 		}
+
+		// set connection to default
+		static::$connection === null or \DBUtil::set_connection(null);
 	}
 }

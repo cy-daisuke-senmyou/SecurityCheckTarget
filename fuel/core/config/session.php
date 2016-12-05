@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -30,7 +30,7 @@ return array(
 	'auto_initialize'	=> true,
 
 	// if no session type is requested, use the default
-	'driver'			=> 'db',
+	'driver'			=> 'cookie',
 
 	// check for an IP address match after loading the cookie (optional, default = false)
 	'match_ip'			=> false,
@@ -47,6 +47,9 @@ return array(
 	// cookie http_only flag  (optional, default = use the cookie class default)
 	'cookie_http_only'	=> null,
 
+	// whether or not to encrypt the session cookie (optional, default is true)
+	'encrypt_cookie'	=> true,
+
 	// if true, the session expires when the browser is closed (optional, default = false)
 	'expire_on_close'	=> false,
 
@@ -62,8 +65,17 @@ return array(
 	// if false, expire flash values only after it's used  (optional, default = true)
 	'flash_auto_expire'	=> true,
 
+	// if true, a get_flash() automatically expires the flash data
+	'flash_expire_after_get' => true,
+
 	// for requests that don't support cookies (i.e. flash), use this POST variable to pass the cookie to the session driver
 	'post_cookie_name'	=> '',
+
+	// for requests in which you don't want to use cookies, use an HTTP header by this name to pass the cookie to the session driver
+	'header_header_name' => 'Session-Id',
+
+	// if false, no cookie will be added to the response send back to the client
+	'enable_cookie'	=> true,
 
 	/**
 	 * specific driver configurations. to override a global setting, just add it to the driver config with a different value
@@ -85,14 +97,14 @@ return array(
 	'memcached'			=> array(
 		'cookie_name'		=> 'fuelmid',				// name of the session cookie for memcached based sessions
 		'servers'			=> array(					// array of servers and portnumbers that run the memcached service
-								array('host' => '127.0.0.1', 'port' => 11211, 'weight' => 100)
+								'default' => array('host' => '127.0.0.1', 'port' => 11211, 'weight' => 100)
 							),
 						),
 
 	// specific configuration settings for database based sessions
 	'db'			=> array(
 		'cookie_name'		=> 'fueldid',				// name of the session cookie for database based sessions
-		'database'			=> 'default',					// name of the database name (as configured in config/db.php)
+		'database'			=> null,					// name of the database name (as configured in config/db.php)
 		'table'				=> 'sessions',				// name of the sessions table
 		'gc_probability'	=> 5						// probability % (between 0 and 100) for garbage collection
 						),

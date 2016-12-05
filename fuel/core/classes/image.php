@@ -1,15 +1,13 @@
 <?php
-
 /**
  * Part of the Fuel framework.
  *
- * Image manipulation class.
- *
- * @package		Fuel
- * @version		1.0
- * @license		MIT License
- * @copyright	2010 - 2011 Fuel Development Team
- * @link		http://fuelphp.com
+ * @package    Fuel
+ * @version    1.6
+ * @author     Fuel Development Team
+ * @license    MIT License
+ * @copyright  2010 - 2013 Fuel Development Team
+ * @link       http://fuelphp.com
  */
 
 namespace Fuel\Core;
@@ -25,6 +23,16 @@ class Image
 	 * @var  array   Config options to be passed when the instance is created.
 	 */
 	protected static $_config = array();
+
+	/**
+	 * Initialize by loading config
+	 *
+	 * @return void
+	 */
+	public static function _init()
+	{
+		\Config::load('image', true);
+	}
 
 	/**
 	 * Creates a new instance for static use of the class.
@@ -50,7 +58,6 @@ class Image
 	{
 		!is_array($config) and $config = array();
 
-		\Config::load('image', 'image');
 		$config = array_merge(\Config::get('image', array()), $config);
 
 		$protocol = ucfirst( ! empty($config['driver']) ? $config['driver'] : 'gd');
@@ -73,7 +80,7 @@ class Image
 	 * Sending the config options through the static reference initalizes the
 	 * instance. If you need to send a driver config through the static reference,
 	 * make sure its the first one sent! If errors arise, create a new instance using
-	 * factory().
+	 * forge().
 	 *
 	 * @param   array   $config   An array of configuration settings.
 	 * @return  Image_Driver
@@ -96,12 +103,14 @@ class Image
 	/**
 	 * Loads the image and checks if its compatable.
 	 *
-	 * @param   string  $filename  The file to load
+	 * @param   string  $filename							The file to load
+	 * @param   string  $return_data					Decides if it should return the images data, or just "$this".
+	 * @param   mixed		$force_extension			Whether or not to force the image extension
 	 * @return  Image_Driver
 	 */
-	public static function load($filename)
+	public static function load($filename, $return_data = false, $force_extension = false)
 	{
-		return static::instance()->load($filename);
+		return static::instance()->load($filename, $return_data, $force_extension);
 	}
 
 	/**
@@ -155,6 +164,18 @@ class Image
 	public static function rotate($degrees)
 	{
 		return static::instance()->rotate($degrees);
+	}
+
+	/**
+	 * Creates a vertical / horizontal or both mirror image.
+	 *
+	 * @access public
+	 * @param string $direction 'vertical', 'horizontal', 'both'
+	 * @return Image_Driver
+	 */
+	public static function flip($direction)
+	{
+		return static::instance()->flip($direction);
 	}
 
 	/**
@@ -223,7 +244,7 @@ class Image
 	 * @param   string  $permissions  Allows unix style permissions
 	 * @return  Image_Driver
 	 */
-	public static function save($filename, $permissions = null)
+	public static function save($filename = null, $permissions = null)
 	{
 		return static::instance()->save($filename, $permissions);
 	}

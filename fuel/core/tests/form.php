@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -20,6 +20,25 @@ namespace Fuel\Core;
  */
 class Test_Form extends TestCase
 {
+	protected function setUp()
+	{
+		Config::load('form');
+		Config::set('form', array(
+			'prep_value'            => true,
+			'auto_id'               => true,
+			'auto_id_prefix'        => 'form_',
+			'form_method'           => 'post',
+			'form_template'         => "\n\t\t{open}\n\t\t<table>\n{fields}\n\t\t</table>\n\t\t{close}\n",
+			'fieldset_template'     => "\n\t\t<tr><td colspan=\"2\">{open}<table>\n{fields}</table></td></tr>\n\t\t{close}\n",
+			'field_template'        => "\t\t<tr>\n\t\t\t<td class=\"{error_class}\">{label}{required}</td>\n\t\t\t<td class=\"{error_class}\">{field} <span>{description}</span> {error_msg}</td>\n\t\t</tr>\n",
+			'multi_field_template'  => "\t\t<tr>\n\t\t\t<td class=\"{error_class}\">{group_label}{required}</td>\n\t\t\t<td class=\"{error_class}\">{fields}\n\t\t\t\t{field} {label}<br />\n{fields}<span>{description}</span>\t\t\t{error_msg}\n\t\t\t</td>\n\t\t</tr>\n",
+			'error_template'        => '<span>{error_msg}</span>',
+			'required_mark'         => '*',
+			'inline_errors'         => false,
+			'error_class'           => 'validation_error',
+		));
+	}
+
 	/**
 	* Tests Form::input()
 	*
@@ -31,6 +50,38 @@ class Test_Form extends TestCase
 	{
 		$output = Form::input('name', '"H&M"');
 		$expected = '<input name="name" value="&quot;H&amp;M&quot;" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', '');
+		$expected = '<input name="name" value="" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', "0");
+		$expected = '<input name="name" value="0" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', 0);
+		$expected = '<input name="name" value="0" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', 1);
+		$expected = '<input name="name" value="1" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', 10);
+		$expected = '<input name="name" value="10" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', true);
+		$expected = '<input name="name" value="1" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', false);
+		$expected = '<input name="name" value="" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', null);
+		$expected = '<input name="name" value="" type="text" id="form_name" />';
 		$this->assertEquals($expected, $output);
 	}
 
@@ -45,6 +96,38 @@ class Test_Form extends TestCase
 	{
 		$output = Form::input('name', '&quot;&#39;H&amp;M&#39;&quot;', array('dont_prep' => true));
 		$expected = '<input name="name" value="&quot;&#39;H&amp;M&#39;&quot;" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', '', array('dont_prep' => true));
+		$expected = '<input name="name" value="" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', "0", array('dont_prep' => true));
+		$expected = '<input name="name" value="0" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', 0, array('dont_prep' => true));
+		$expected = '<input name="name" value="0" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', 1, array('dont_prep' => true));
+		$expected = '<input name="name" value="1" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', 10, array('dont_prep' => true));
+		$expected = '<input name="name" value="10" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', true, array('dont_prep' => true));
+		$expected = '<input name="name" value="1" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', false, array('dont_prep' => true));
+		$expected = '<input name="name" value="" type="text" id="form_name" />';
+		$this->assertEquals($expected, $output);
+
+		$output = Form::input('name', null, array('dont_prep' => true));
+		$expected = '<input name="name" value="" type="text" id="form_name" />';
 		$this->assertEquals($expected, $output);
 	}
 
@@ -92,8 +175,8 @@ class Test_Form extends TestCase
 			)
 		);
 		$expected = '<select name="fieldname" id="form_fieldname">'.PHP_EOL
-					.'	<option value="key_H&amp;M" style="text-indent: 0px;">val_H&amp;M</option>'.PHP_EOL
-					.'	<option value="key_&quot;&quot;" style="text-indent: 0px;">val_&quot;&quot;</option>'.PHP_EOL
+					.'	<option value="key_H&amp;M">val_H&amp;M</option>'.PHP_EOL
+					.'	<option value="key_&quot;&quot;">val_&quot;&quot;</option>'.PHP_EOL
 					.'</select>';
 		$this->assertEquals($expected, $output);
 	}
@@ -129,8 +212,8 @@ class Test_Form extends TestCase
 			)
 		);
 		$expected = '<select name="fieldname" id="form_fieldname">'.PHP_EOL
-					.'	<option value="key_H&amp;M" style="text-indent: 0px;">val_H&amp;M</option>'.PHP_EOL
-					.'	<option value="key_&quot;&#39;&quot;" style="text-indent: 0px;">val_&quot;&#39;&quot;</option>'.PHP_EOL
+					.'	<option value="key_H&amp;M">val_H&amp;M</option>'.PHP_EOL
+					.'	<option value="key_&quot;&#39;&quot;">val_&quot;&#39;&quot;</option>'.PHP_EOL
 					.'</select>';
 		$this->assertEquals($expected, $output);
 	}

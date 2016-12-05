@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.1
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -85,7 +85,7 @@ class Module
 		// make sure the path exists
 		if ( ! is_dir($path))
 		{
-			throw new \ModuleNotFoundException("Module '$module' could not be found at '".\Fuel::clean_path($path)."'");
+			throw new ModuleNotFoundException("Module '$module' could not be found at '".\Fuel::clean_path($path)."'");
 		}
 
 		// determine the module namespace
@@ -140,15 +140,23 @@ class Module
 	 */
 	public static function exists($module)
 	{
-		$paths = \Config::get('module_paths', array());
-
-		foreach ($paths as $path)
+		if (array_key_exists($module, static::$modules))
 		{
-			if (is_dir($path.$module))
+			return static::$modules[$module];
+		}
+		else
+		{
+			$paths = \Config::get('module_paths', array());
+
+			foreach ($paths as $path)
 			{
-				return $path.$module.DS;
+				if (is_dir($path.$module))
+				{
+					return $path.$module.DS;
+				}
 			}
 		}
+
 		return false;
 	}
 }
