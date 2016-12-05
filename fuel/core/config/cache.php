@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -57,7 +57,7 @@ return array(
 	'memcached'  => array(
 		'cache_id'  => 'fuel',  // unique id to distinquish fuel cache items from others stored on the same server(s)
 		'servers'   => array(   // array of servers and portnumbers that run the memcached service
-			array('host' => '127.0.0.1', 'port' => 11211, 'weight' => 100)
+			'default' => array('host' => '127.0.0.1', 'port' => 11211, 'weight' => 100)
 		),
 	),
 

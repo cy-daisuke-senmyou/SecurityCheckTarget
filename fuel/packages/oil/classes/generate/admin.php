@@ -1,12 +1,14 @@
 <?php
 /**
+ * Fuel
+ *
  * Fuel is a fast, lightweight, community driven PHP5 framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2011 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -26,7 +28,14 @@ class Generate_Admin extends Generate_Scaffold
 	public static $controller_prefix = 'Admin_';
 	public static $model_prefix = '';
 
-	public static $controller_parent = 'Controller_Admin';
+	public static $controller_parent = 'Admin';
+
+	public static function _init()
+	{
+		static::$controller_parent = \Config::get('controller_prefix', 'Controller_').static::$controller_parent;
+
+		parent::_init();
+	}
 
 	public static function forge($args, $subfolder)
 	{
@@ -68,7 +77,7 @@ class Generate_Admin extends Generate_Scaffold
 			}
 			else
 			{
-				Generate::create(APPPATH.$file['location'], file_get_contents(PKGPATH.'oil/views/'.static::$view_subdir.$file['source']), $file['type']);
+				Generate::create(APPPATH.$file['location'], file_get_contents(\Package::exists('oil').'views/'.static::$view_subdir.$file['source']), $file['type']);
 			}
 		}
 

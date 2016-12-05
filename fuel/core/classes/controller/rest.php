@@ -26,9 +26,24 @@ abstract class Controller_Rest extends \Controller
 	protected $no_data_status = 204;
 
 	/**
+	 * @var  string  authentication to be used for this controller
+	 */
+	protected $auth = null;
+
+	/**
 	 * @var  string  the detected response format
 	 */
 	protected $format = null;
+
+	/**
+	 * @var  integer  response http status
+	 */
+	protected $http_status = null;
+
+	/**
+	 * @var  string  xml basenode name
+	 */
+	protected $xml_basenode = null;
 
 	/**
 	 * @var  array  List all supported methods
@@ -41,7 +56,7 @@ abstract class Controller_Rest extends \Controller
 		'serialized' => 'application/vnd.php.serialized',
 		'php' => 'text/plain',
 		'html' => 'text/html',
-		'csv' => 'application/csv'
+		'csv' => 'application/csv',
 	);
 
 	public function before()
@@ -59,9 +74,16 @@ abstract class Controller_Rest extends \Controller
 
 	public function after($response)
 	{
-		// If the response is a Response object, we will use their instead of
-		// ours.
-		if ( ! $response instanceof \Response)
+		// If the response is an array
+		if (is_array($response))
+		{
+			// set the response
+			$response = $this->response($response);
+		}
+
+		// If the response is a Response object, we will use their
+		// instead of ours.
+		if ( ! $response instanceof Response)
 		{
 			$response = $this->response;
 		}
@@ -78,7 +100,7 @@ abstract class Controller_Rest extends \Controller
 	 * @param  string
 	 * @param  array
 	 */
-	public function router($resource, array $arguments)
+	public function router($resource, $arguments)
 	{
 		\Config::load('rest', true);
 
@@ -89,18 +111,32 @@ abstract class Controller_Rest extends \Controller
 			$this->format = array_key_exists(\Input::extension(), $this->_supported_formats) ? \Input::extension() : $this->_detect_format();
 		}
 
-		//Check method is authorized if required
-		if (\Config::get('rest.auth') == 'basic')
+		// Get the configured auth method if none is defined
+		$this->auth === null and $this->auth = \Config::get('rest.auth');
+
+		//Check method is authorized if required, and if we're authorized
+		if ($this->auth == 'basic')
 		{
 			$valid_login = $this->_prepare_basic_auth();
 		}
-		elseif (\Config::get('rest.auth') == 'digest')
+		elseif ($this->auth == 'digest')
 		{
 			$valid_login = $this->_prepare_digest_auth();
 		}
+		elseif (method_exists($this, $this->auth))
+		{
+			if ($valid_login = $this->{$this->auth}() instanceOf \Response)
+			{
+				return $valid_login;
+			}
+		}
+		else
+		{
+			$valid_login = false;
+		}
 
 		//If the request passes auth then execute as normal
-		if(\Config::get('rest.auth') == '' or $valid_login)
+		if(empty($this->auth) or $valid_login)
 		{
 			// If they call user, go to $this->post_user();
 			$controller_method = strtolower(\Input::method()) . '_' . $resource;
@@ -114,7 +150,7 @@ abstract class Controller_Rest extends \Controller
 			// If method is not available, set status code to 404
 			if (method_exists($this, $controller_method))
 			{
-				call_user_func_array(array($this, $controller_method), $arguments);
+				return call_user_func_array(array($this, $controller_method), $arguments);
 			}
 			else
 			{
@@ -133,33 +169,69 @@ abstract class Controller_Rest extends \Controller
 	 *
 	 * Takes pure data and optionally a status code, then creates the response
 	 *
-	 * @param  mixed
-	 * @param  int
+	 * @param   mixed
+	 * @param   int
+	 * @return  object  Response instance
 	 */
-	protected function response($data = array(), $http_code = 200)
+	protected function response($data = array(), $http_status = null)
 	{
+		// set the correct response header
+		if (method_exists('Format', 'to_'.$this->format))
+		{
+			$this->response->set_header('Content-Type', $this->_supported_formats[$this->format]);
+		}
+
+		// no data returned? Set the NO CONTENT status on the response
 		if ((is_array($data) and empty($data)) or ($data == ''))
 		{
 			$this->response->status = $this->no_data_status;
-			return;
+			return $this->response;
 		}
 
-		$this->response->status = $http_code;
+		// make sure we have a valid return status
+		$http_status or $http_status = $this->http_status;
 
 		// If the format method exists, call and return the output in that format
 		if (method_exists('Format', 'to_'.$this->format))
 		{
-			// Set the correct format header
-			$this->response->set_header('Content-Type', $this->_supported_formats[$this->format]);
+			// Handle XML output
+			if ($this->format === 'xml')
+			{
+				// Detect basenode
+				$xml_basenode = $this->xml_basenode;
+				$xml_basenode or $xml_basenode = \Config::get('rest.xml_basenode', 'xml');
 
-			$this->response->body(\Format::forge($data)->{'to_'.$this->format}());
+				// Set the XML response
+				$this->response->body(\Format::forge($data)->{'to_'.$this->format}(null, null, $xml_basenode));
+			}
+			else
+			{
+				// Set the formatted response
+				$this->response->body(\Format::forge($data)->{'to_'.$this->format}());
+			}
 		}
 
 		// Format not supported, output directly
 		else
 		{
-			$this->response->body((string) $data);
+			$this->response->body($data);
 		}
+
+		// Set the reponse http status
+		$http_status and $this->response->status = $http_status;
+
+		return $this->response;
+	}
+
+	/**
+	 * Set the Response http status.
+	 *
+	 * @param   integer  $status  response http status code
+	 * @return  void
+	 */
+	protected function http_status($status)
+	{
+		$this->http_status = $status;
 	}
 
 	/**
@@ -172,14 +244,19 @@ abstract class Controller_Rest extends \Controller
 	protected function _detect_format()
 	{
 		// A format has been passed as an argument in the URL and it is supported
-		if (\Input::param('format') and $this->_supported_formats[\Input::param('format')])
+		if (\Input::param('format') and array_key_exists(\Input::param('format'), $this->_supported_formats))
 		{
 			return \Input::param('format');
 		}
 
 		// Otherwise, check the HTTP_ACCEPT (if it exists and we are allowed)
-		if (\Input::server('HTTP_ACCEPT') and \Config::get('rest.ignore_http_accept') !== true)
+		if ($acceptable = \Input::server('HTTP_ACCEPT') and \Config::get('rest.ignore_http_accept') !== true)
 		{
+			// If anything is accepted, and we have a default, return that
+			if ($acceptable == '*/*' and ! empty($this->rest_format))
+			{
+				return $this->rest_format;
+			}
 
 			// Split the Accept header and build an array of quality scores for each format
 			$fragments = new \CachingIterator(new \ArrayIterator(preg_split('/[,;]/', \Input::server('HTTP_ACCEPT'))));
@@ -349,7 +426,7 @@ abstract class Controller_Rest extends \Controller
 		}
 		else
 		{
-			$digest_string = "";
+			$digest_string = '';
 		}
 
 		/* The $_SESSION['error_prompted'] variabile is used to ask
@@ -389,11 +466,14 @@ abstract class Controller_Rest extends \Controller
 
 	protected function _force_login($nonce = '')
 	{
-		if (\Config::get('rest.auth') == 'basic')
+		// Get the configured auth method if none is defined
+		$this->auth === null and $this->auth = \Config::get('rest.auth');
+
+		if ($this->auth == 'basic')
 		{
 			$this->response->set_header('WWW-Authenticate', 'Basic realm="'. \Config::get('rest.realm') . '"');
 		}
-		elseif (\Config::get('rest.auth') == 'digest')
+		elseif ($this->auth == 'digest')
 		{
 			$this->response->set_header('WWW-Authenticate', 'Digest realm="' . \Config::get('rest.realm') . '", qop="auth", nonce="' . $nonce . '", opaque="' . md5(\Config::get('rest.realm')) . '"');
 		}

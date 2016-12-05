@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -60,6 +60,7 @@ class Asset
 		'indent_level' => 1,
 		'indent_with' => "\t",
 		'auto_render' => true,
+		'fail_silently' => false,
 	);
 
 	/**
@@ -156,7 +157,7 @@ class Asset
 	 * @param   bool    whether to return the raw file or not
 	 * @return  string  the group's output
 	 */
-	public static function render($group, $raw = false)
+	public static function render($group = null, $raw = false)
 	{
 		return static::instance()->render($group, $raw);
 	}
@@ -230,5 +231,22 @@ class Asset
 	public static function get_file($file, $type, $folder = '')
 	{
 		return static::instance()->get_file($file, $type, $folder);
+	}
+
+	// --------------------------------------------------------------------
+
+	/**
+	 * Find File
+	 *
+	 * Locates a file in all the asset paths.
+	 *
+	 * @access	public
+	 * @param	string	The filename to locate
+	 * @param	string	The sub-folder to look in (optional)
+	 * @return	mixed	Either the path to the file or false if not found
+	 */
+	public static function find_file($file, $type, $folder = '')
+	{
+		return static::instance()->find_file($file, $type, $folder);
 	}
 }

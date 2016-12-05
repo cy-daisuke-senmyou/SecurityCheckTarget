@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -45,9 +45,19 @@ class Input
 	protected static $put_delete = null;
 
 	/**
-	 * @var  $content  parsed request body (xml/json)
+	 * @var  $php_input  Cache for the php://input stream
 	 */
-	protected static $content = null;
+	protected static $php_input = null;
+
+	/**
+	 * @var  $json  parsed request body as json
+	 */
+	protected static $json = null;
+
+	/**
+	 * @var  $xml  parsed request body as xml
+	 */
+	protected static $xml = null;
 
 	/**
 	 * Get the request body interpreted as JSON.
@@ -56,12 +66,8 @@ class Input
 	 */
 	public static function json($index = null, $default = null)
 	{
-		if (static::$content === null)
-		{
-			static::hydrate_raw_input('json');
-		}
-
-		return (func_num_args() === 0) ? static::$content : \Arr::get(static::$content, $index, $default);
+		static::$json === null and static::hydrate_raw_input('json');
+		return (func_num_args() === 0) ? static::$json : \Arr::get(static::$json, $index, $default);
 	}
 
 	/**
@@ -71,12 +77,8 @@ class Input
 	 */
 	public static function xml($index = null, $default = null)
 	{
-		if (static::$content === null)
-		{
-			static::hydrate_raw_input('xml');
-		}
-
-		return (func_num_args() === 0) ? static::$content : \Arr::get(static::$content, $index, $default);
+		static::$xml === null and static::hydrate_raw_input('xml');
+		return (func_num_args() === 0) ? static::$xml : \Arr::get(static::$xml, $index, $default);
 	}
 
 	/**
@@ -86,8 +88,8 @@ class Input
 	 */
 	protected static function hydrate_raw_input($type)
 	{
-		$content = \Format::forge(file_get_contents('php://input'), $type)->to_array();
-		is_array($content) and static::$content = \Security::clean($content);
+		static::$php_input === null and static::$php_input = file_get_contents('php://input');
+		static::$$type = \Security::clean(\Format::forge(static::$php_input, $type)->to_array());
 	}
 
 	/**
@@ -174,12 +176,30 @@ class Input
 			}
 		}
 
-		// Strip the defined url suffix from the uri if needed
-		$uri_info = pathinfo($uri);
-		if ( ! empty($uri_info['extension']))
+		// Deal with any trailing dots
+		$uri = rtrim($uri, '.');
+
+		// Do we have a URI and does it not end on a slash?
+		if ($uri and substr($uri, -1) !== '/')
 		{
-			static::$detected_ext = $uri_info['extension'];
-			$uri = $uri_info['dirname'].'/'.$uri_info['filename'];
+			// Strip the defined url suffix from the uri if needed
+			$ext = strrchr($uri, '.');
+			$path = $ext === false ? $uri : substr($uri, 0, -strlen($ext));
+
+			// Did we detect something that looks like an extension?
+			if ( ! empty($ext))
+			{
+				// if it has a slash in it, it's a URI segment with a dot in it
+				if (strpos($ext,'/') === false)
+				{
+					static::$detected_ext = ltrim($ext, '.');
+
+					if (\Config::get('routing.strip_extension', true))
+					{
+						$uri = $path;
+					}
+				}
+			}
 		}
 
 		// Do some final clean up of the uri
@@ -219,7 +239,16 @@ class Input
 	 */
 	public static function real_ip($default = '0.0.0.0', $exclude_reserved = false)
 	{
-		$server_keys = array('HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_CLIENT_IP', 'REMOTE_ADDR');
+		static $server_keys = null;
+
+		if (empty($server_keys))
+		{
+			$server_keys = array('HTTP_CLIENT_IP', 'REMOTE_ADDR');
+			if (\Config::get('security.allow_x_headers', false))
+			{
+				$server_keys = array_merge(array('HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_X_FORWARDED_FOR'), $server_keys);
+			}
+		}
 
 		foreach ($server_keys as $key)
 		{
@@ -233,12 +262,9 @@ class Input
 				$ip = trim($ip);
 			});
 
-			if ($exclude_reserved)
-			{
-				$ips = array_filter($ips, function($ip) {
-					return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
-				});
-			}
+			$ips = array_filter($ips, function($ip) use($exclude_reserved) {
+				return filter_var($ip, FILTER_VALIDATE_IP, $exclude_reserved ? FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE : null);
+			});
 
 			if ($ips)
 			{
@@ -256,8 +282,11 @@ class Input
 	 */
 	public static function protocol()
 	{
-		if ((static::server('HTTPS') !== null and static::server('HTTPS') != 'off')
-			or (static::server('HTTPS') === null and static::server('SERVER_PORT') == 443))
+		if (static::server('HTTPS') == 'on' or
+			static::server('HTTPS') == 1 or
+			static::server('SERVER_PORT') == 443 or
+			(\Config::get('security.allow_x_headers', false) and static::server('HTTP_X_FORWARDED_PROTO') == 'https') or
+			(\Config::get('security.allow_x_headers', false) and static::server('HTTP_X_FORWARDED_PORT') == 443))
 		{
 			return 'https';
 		}
@@ -292,7 +321,21 @@ class Input
 	 */
 	public static function method($default = 'GET')
 	{
-		return static::server('HTTP_X_HTTP_METHOD_OVERRIDE', static::server('REQUEST_METHOD', $default));
+		// get the method from the current active request
+		if ($request = \Request::active() and $method = $request->get_method())
+		{
+			return $method;
+		}
+
+		// if called before a request is active, fall back to the global server setting
+		if (\Config::get('security.allow_x_headers', false))
+		{
+			return \Input::server('HTTP_X_HTTP_METHOD_OVERRIDE', \Input::server('REQUEST_METHOD', $default));
+		}
+		else
+		{
+			return \Input::server('REQUEST_METHOD', $default);
+		}
 	}
 
 	/**
@@ -312,11 +355,7 @@ class Input
 	 */
 	public static function all()
 	{
-		if (static::$input === null)
-		{
-			static::hydrate();
-		}
-
+		static::$input === null and static::hydrate();
 		return static::$input;
 	}
 
@@ -353,11 +392,7 @@ class Input
 	 */
 	public static function put($index = null, $default = null)
 	{
-		if (static::$put_delete === null)
-		{
-			static::hydrate();
-		}
-
+		static::$put_delete === null and static::hydrate();
 		return (func_num_args() === 0) ? static::$put_delete : \Arr::get(static::$put_delete, $index, $default);
 	}
 
@@ -370,11 +405,7 @@ class Input
 	 */
 	public static function delete($index = null, $default = null)
 	{
-		if (static::$put_delete === null)
-		{
-			static::hydrate();
-		}
-
+		static::$put_delete === null and static::hydrate();
 		return (is_null($index) and func_num_args() === 0) ? static::$put_delete : \Arr::get(static::$put_delete, $index, $default);
 	}
 
@@ -399,11 +430,7 @@ class Input
 	 */
 	public static function param($index = null, $default = null)
 	{
-		if (static::$input === null)
-		{
-			static::hydrate();
-		}
-
+		static::$input === null and static::hydrate();
 		return \Arr::get(static::$input, $index, $default);
 	}
 
@@ -432,6 +459,42 @@ class Input
 	}
 
 	/**
+	 * Fetch a item from the HTTP request headers
+	 *
+	 * @return  array
+	 */
+	public static function headers($index = null, $default = null)
+	{
+		static $headers = null;
+
+		// do we need to fetch the headers?
+		if ($headers === null)
+		{
+			// deal with fcgi or nginx installs
+			if ( ! function_exists('getallheaders'))
+			{
+				$server = \Arr::filter_prefixed(static::server(), 'HTTP_', true);
+
+				foreach ($server as $key => $value)
+				{
+					$key = join('-', array_map('ucfirst', explode('_', strtolower($key))));
+
+					$headers[$key] = $value;
+				}
+
+				$value = static::server('Content-Type') and $headers['Content-Type'] = $value;
+				$value = static::server('Content-Length') and $headers['Content-Length'] = $value;
+			}
+			else
+			{
+				$headers = getallheaders();
+			}
+		}
+
+		return empty($headers) ? $default : ((func_num_args() === 0) ? $headers : \Arr::get($headers, $index, $default));
+	}
+
+	/**
 	 * Hydrates the input array
 	 *
 	 * @return  void
@@ -442,7 +505,12 @@ class Input
 
 		if (\Input::method() == 'PUT' or \Input::method() == 'DELETE')
 		{
-			parse_str(file_get_contents('php://input'), static::$put_delete);
+			static::$php_input === null and static::$php_input = file_get_contents('php://input');
+			if (strpos(static::headers('Content-Type'), 'www-form-urlencoded') > 0)
+			{
+				static::$php_input = urldecode(static::$php_input);
+			}
+			parse_str(static::$php_input, static::$put_delete);
 			static::$input = array_merge(static::$input, static::$put_delete);
 		}
 	}

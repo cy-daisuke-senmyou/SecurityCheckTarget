@@ -1,15 +1,13 @@
 <?php
-
 /**
  * Part of the Fuel framework.
  *
- * Image manipulation class.
- *
- * @package		Fuel
- * @version		1.0
- * @license		MIT License
- * @copyright	2010 - 2011 Fuel Development Team
- * @link		http://fuelphp.com
+ * @package    Fuel
+ * @version    1.6
+ * @author     Fuel Development Team
+ * @license    MIT License
+ * @copyright  2010 - 2013 Fuel Development Team
+ * @link       http://fuelphp.com
  */
 
 namespace Fuel\Core;
@@ -26,16 +24,25 @@ abstract class Image_Driver
 	protected $queued_actions  = array();
 	protected $accepted_extensions;
 
+	/**
+	 * Initialize by loading config
+	 *
+	 * @return void
+	 */
+	public static function _init()
+	{
+		\Config::load('image', true);
+	}
+
 	public function __construct($config)
 	{
-		Config::load('image', 'image');
 		if (is_array($config))
 		{
-			$this->config = array_merge(Config::get('image'), $config);
+			$this->config = array_merge(\Config::get('image', array()), $config);
 		}
 		else
 		{
-			$this->config = Config::get('image');
+			$this->config = \Config::get('image', array());
 		}
 		$this->debug("Image Class was initialized using the " . $this->config['driver'] . " driver.");
 	}
@@ -106,11 +113,12 @@ abstract class Image_Driver
 	/**
 	 * Loads the image and checks if its compatible.
 	 *
-	 * @param   string  $filename     The file to load
-	 * @param   string  $return_data  Decides if it should return the images data, or just "$this".
+	 * @param   string  $filename								The file to load
+	 * @param   string  $return_data						Decides if it should return the images data, or just "$this".
+	 * @param   mixed   $force_extension				Decides if it should force the extension witht this (or false)
 	 * @return  Image_Driver
 	 */
-	public function load($filename, $return_data = false)
+	public function load($filename, $return_data = false, $force_extension = false)
 	{
 		// First check if the filename exists
 		$filename = realpath($filename);
@@ -121,7 +129,7 @@ abstract class Image_Driver
 		if (file_exists($filename))
 		{
 			// Check the extension
-			$ext = $this->check_extension($filename, false);
+			$ext = $this->check_extension($filename, false, $force_extension);
 			if ($ext !== false)
 			{
 				$return = array_merge($return, array(
@@ -211,6 +219,20 @@ abstract class Image_Driver
 	public function resize($width, $height = null, $keepar = true, $pad = false)
 	{
 		$this->queue('resize', $width, $height, $keepar, $pad);
+		return $this;
+	}
+
+
+	/**
+	 * Creates a vertical / horizontal or both mirror image.
+	 *
+	 * @access public
+	 * @param mixed $direction 'vertical', 'horizontal', 'both'
+	 * @return Image_Driver
+	 */
+	public function flip($direction)
+	{
+		$this->queue('flip', $direction);
 		return $this;
 	}
 
@@ -332,7 +354,6 @@ abstract class Image_Driver
 		$sizes   = $this->sizes();
 		$width   = $this->convert_number($width, true);
 		$height  = $this->convert_number($height, false);
-		$x = $y = 0;
 
 		if (function_exists('bcdiv'))
 		{
@@ -358,8 +379,8 @@ abstract class Image_Driver
 		}
 
 		$sizes = $this->sizes();
-		$y = floor(($sizes->height - $height) / 2);
-		$x = floor(($sizes->width - $width) / 2);
+		$y = floor(max(0, $sizes->height - $height) / 2);
+		$x = floor(max(0, $sizes->width - $width) / 2);
 		$this->_crop($x, $y, $x + $width, $y + $height);
 	}
 
@@ -602,8 +623,13 @@ abstract class Image_Driver
 	 * @param   string  $permissions  Allows unix style permissions
 	 * @return  array
 	 */
-	public function save($filename, $permissions = null)
+	public function save($filename = null, $permissions = null)
 	{
+		if (empty($filename))
+		{
+			$filename = $this->image_filename;
+		}
+
 		$directory = dirname($filename);
 		if ( ! is_dir($directory))
 		{
@@ -667,7 +693,8 @@ abstract class Image_Driver
 		{
 			if ( ! $this->config['debug'])
 			{
-				header('Content-Type: image/' . $filetype);
+				$mimetype = $filetype === 'jpg' ? 'jpeg' : $filetype;
+				header('Content-Type: image/' . $mimetype);
 			}
 			$this->new_extension = $filetype;
 		}
@@ -731,7 +758,7 @@ abstract class Image_Driver
 				$blue  = hexdec(substr($hex, 2, 1).substr($hex, 2, 1));
 			}
 		}
-		
+
 		return array(
 			'red' => $red,
 			'green' => $green,
@@ -743,12 +770,19 @@ abstract class Image_Driver
 	 * Checks if the extension is accepted by this library, and if its valid sets the $this->image_extension variable.
 	 *
 	 * @param   string   $filename
-	 * @param   boolean  $writevar  Decides if the extension should be written to $this->image_extension
+	 * @param   boolean  $writevar					Decides if the extension should be written to $this->image_extension
+	 * @param   mixed		 $force_extension		Decides if the extension should be overridden with this (or false)
 	 * @return  boolean
 	 */
-	protected function check_extension($filename, $writevar = true)
+	protected function check_extension($filename, $writevar = true, $force_extension = false)
 	{
 		$return = false;
+
+		if ($force_extension !== false and in_array($force_extension, $this->accepted_extensions))
+		{
+			return $force_extension;
+		}
+
 		foreach ($this->accepted_extensions as $ext)
 		{
 			if (strtolower(substr($filename, strlen($ext) * -1)) == strtolower($ext))

@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -19,11 +19,14 @@ namespace Fuel\Core;
  *
  * @package		Fuel
  * @category	Core
- * @author		Phil Sturgeon
  * @link		http://docs.fuelphp.com/classes/debug.html
  */
 class Debug
 {
+
+	public static $max_nesting_level = 5;
+
+	public static $js_toggle_open = false;
 
 	protected static $js_displayed = false;
 
@@ -38,38 +41,65 @@ class Debug
 	 */
 	public static function dump()
 	{
-		$backtrace = debug_backtrace();
-
-		// If being called from within, show the file above in the backtrack
-		if (strpos($backtrace[0]['file'], 'core/classes/debug.php') !== FALSE)
+		if (\Fuel::$is_cli)
 		{
-			$callee = $backtrace[1];
-			$label = \Inflector::humanize($backtrace[1]['function']);
+			// no fancy flying, jump dump 'm
+			foreach (func_get_args() as $arg)
+			{
+				var_dump($arg);
+			}
 		}
 		else
 		{
-			$callee = $backtrace[0];
-			$label = 'Debug';
+			$backtrace = debug_backtrace();
+
+			// locate the first file entry that isn't this class itself
+			foreach ($backtrace as $stack => $trace)
+			{
+				if (isset($trace['file']))
+				{
+					// If being called from within, show the file above in the backtrack
+					if (strpos($trace['file'], 'core/classes/debug.php') !== FALSE)
+					{
+						$callee = $backtrace[$stack+1];
+						$label = \Inflector::humanize($backtrace[$stack+1]['function']);
+					}
+					else
+					{
+						$callee = $trace;
+						$label = 'Debug';
+					}
+
+					$callee['file'] = \Fuel::clean_path($callee['file']);
+
+					break;
+				}
+			}
+
+			$arguments = func_get_args();
+
+			if ( ! static::$js_displayed)
+			{
+				echo <<<JS
+	<script type="text/javascript">function fuel_debug_toggle(a){if(document.getElementById){if(document.getElementById(a).style.display=="none"){document.getElementById(a).style.display="block"}else{document.getElementById(a).style.display="none"}}else{if(document.layers){if(document.id.display=="none"){document.id.display="block"}else{document.id.display="none"}}else{if(document.all.id.style.display=="none"){document.all.id.style.display="block"}else{document.all.id.style.display="none"}}}};</script>
+JS;
+				static::$js_displayed = true;
+			}
+			echo '<div class="fuelphp-dump" style="font-size: 13px;background: #EEE !important; border:1px solid #666; color: #000 !important; padding:10px;">';
+			echo '<h1 style="border-bottom: 1px solid #CCC; padding: 0 0 5px 0; margin: 0 0 5px 0; font: bold 120% sans-serif;">'.$callee['file'].' @ line: '.$callee['line'].'</h1>';
+			echo '<pre style="overflow:auto;font-size:100%;">';
+
+			$count = count($arguments);
+			for ($i = 1; $i <= $count; $i++)
+			{
+				echo '<strong>Variable #'.$i.':</strong>'.PHP_EOL;
+				echo static::format('', $arguments[$i - 1]);
+				echo PHP_EOL.PHP_EOL;
+			}
+
+			echo "</pre>";
+			echo "</div>";
 		}
-
-		$arguments = func_get_args();
-
-		$callee['file'] = \Fuel::clean_path($callee['file']);
-
-		echo '<div style="font-size: 13px;background: #EEE !important; border:1px solid #666; color: #000 !important; padding:10px;">';
-		echo '<h1 style="border-bottom: 1px solid #CCC; padding: 0 0 5px 0; margin: 0 0 5px 0; font: bold 120% sans-serif;">'.$callee['file'].' @ line: '.$callee['line'].'</h1>';
-		echo '<pre style="overflow:auto;font-size:100%;">';
-
-		$count = count($arguments);
-		for ($i = 1; $i <= $count; $i++)
-		{
-			echo '<strong>Variable #'.$i.':</strong>'.PHP_EOL;
-			var_dump($arguments[$i - 1]);
-			echo PHP_EOL.PHP_EOL;
-		}
-
-		echo "</pre>";
-		echo "</div>";
 	}
 
 	/**
@@ -107,7 +137,7 @@ class Debug
 JS;
 			static::$js_displayed = true;
 		}
-		echo '<div style="font-size: 13px;background: #EEE !important; border:1px solid #666; color: #000 !important; padding:10px;">';
+		echo '<div class="fuelphp-inspect" style="font-size: 13px;background: #EEE !important; border:1px solid #666; color: #000 !important; padding:10px;">';
 		echo '<h1 style="border-bottom: 1px solid #CCC; padding: 0 0 5px 0; margin: 0 0 5px 0; font: bold 120% sans-serif;">'.$callee['file'].' @ line: '.$callee['line'].'</h1>';
 		echo '<pre style="overflow:auto;font-size:100%;">';
 		$i = 0;
@@ -131,84 +161,133 @@ JS;
 	 * @param	string	$indent_char	the indentation character
 	 * @return	string	the formatted string.
 	 */
-	public static function format($name, $var, $level = 0, $indent_char = '&nbsp;&nbsp;&nbsp;&nbsp;')
+	public static function format($name, $var, $level = 0, $indent_char = '&nbsp;&nbsp;&nbsp;&nbsp;', $scope = '')
 	{
 		$return = str_repeat($indent_char, $level);
 		if (is_array($var))
 		{
 			$id = 'fuel_debug_'.mt_rand();
-			if (count($var) > 0)
+			$return .= "<i>{$scope}</i> <strong>{$name}</strong>";
+			$return .=  " (Array, ".count($var)." element".(count($var)!=1?"s":"").")";
+			if (count($var) > 0 and static::$max_nesting_level > $level)
 			{
-				$return .= "<a href=\"javascript:fuel_debug_toggle('$id');\"><strong>{$name}</strong></a>";
+				$return .= " <a href=\"javascript:fuel_debug_toggle('$id');\" title=\"Click to ".(static::$js_toggle_open?"close":"open")."\">&crarr;</a>\n";
 			}
 			else
 			{
-				$return .= "<strong>{$name}</strong>";
-			}
-			$return .=  " (Array, ".count($var)." elements)\n";
-
-			$sub_return = '';
-			foreach ($var as $key => $val)
-			{
-				$sub_return .= static::format($key, $val, $level + 1);
+				$return .= "\n";
 			}
 
-			if (count($var) > 0)
+			if (static::$max_nesting_level <= $level)
 			{
-				$return .= "<span id=\"$id\" style=\"display: none;\">$sub_return</span>";
+				$return .= str_repeat($indent_char, $level + 1)."...\n";
 			}
 			else
 			{
-				$return .= $sub_return;
+				$sub_return = '';
+				foreach ($var as $key => $val)
+				{
+					$sub_return .= static::format($key, $val, $level + 1);
+				}
+				if (count($var) > 0)
+				{
+					$return .= "<span id=\"$id\" style=\"display: ".(static::$js_toggle_open?"block":"none").";\">$sub_return</span>";
+				}
+				else
+				{
+					$return .= $sub_return;
+				}
 			}
+
 		}
 		elseif (is_string($var))
 		{
-			$return .= "<strong>{$name}</strong> (String, ".strlen($var)." characters): \"{$var}\"\n";
+			$return .= "<i>{$scope}</i> <strong>{$name}</strong> (String): <span style=\"color:#E00000;\">\"".\Security::htmlentities($var)."\"</span> (".strlen($var)." characters)\n";
 		}
 		elseif (is_float($var))
 		{
-			$return .= "<strong>{$name}</strong> (Float): {$var}\n";
+			$return .= "<i>{$scope}</i> <strong>{$name}</strong> (Float): {$var}\n";
 		}
 		elseif (is_long($var))
 		{
-			$return .= "<strong>{$name}</strong> (Integer): {$var}\n";
+			$return .= "<i>{$scope}</i> <strong>{$name}</strong> (Integer): {$var}\n";
 		}
 		elseif (is_null($var))
 		{
-			$return .= "<strong>{$name}</strong> (Null): null\n";
+			$return .= "<i>{$scope}</i> <strong>{$name}</strong> : null\n";
 		}
 		elseif (is_bool($var))
 		{
-			$return .= "<strong>{$name}</strong> (Boolean): ".($var ? 'true' : 'false')."\n";
+			$return .= "<i>{$scope}</i> <strong>{$name}</strong> (Boolean): ".($var ? 'true' : 'false')."\n";
 		}
 		elseif (is_double($var))
 		{
-			$return .= "<strong>{$name}</strong> (Double): {$var}\n";
+			$return .= "<i>{$scope}</i> <strong>{$name}</strong> (Double): {$var}\n";
 		}
 		elseif (is_object($var))
 		{
-			$id = 'fuel_debug_'.mt_rand();
-			$vars = get_object_vars($var);
-			if (count($vars) > 0)
+			// dirty hack to get the object id
+			ob_start();
+			var_dump($var);
+			$contents = ob_get_contents();
+			ob_end_clean();
+
+			// process it based on the xdebug presence and configuration
+			if (extension_loaded('xdebug') and ini_get('xdebug.overload_var_dump') === '1')
 			{
-				$return .= "<a href=\"javascript:fuel_debug_toggle('$id');\"><strong>{$name}</strong></a>";
+				if (ini_get('html_errors'))
+				{
+					preg_match('~(.*?)\)\[<i>(\d+)(.*)~', $contents, $matches);
+				}
+				else
+				{
+					preg_match('~class (.*?)#(\d+)(.*)~', $contents, $matches);
+				}
 			}
 			else
 			{
-				$return .= "<strong>{$name}</strong>";
+				preg_match('~object\((.*?)#(\d+)(.*)~', $contents, $matches);
 			}
-			$return .= " (Object): ".get_class($var)."\n";
+
+			$id = 'fuel_debug_'.mt_rand();
+			$rvar = new \ReflectionObject($var);
+			$vars = $rvar->getProperties();
+			$return .= "<i>{$scope}</i> <strong>{$name}</strong> (Object #".$matches[2]."): ".get_class($var);
+			if (count($vars) > 0 and static::$max_nesting_level > $level)
+			{
+				$return .= " <a href=\"javascript:fuel_debug_toggle('$id');\" title=\"Click to ".(static::$js_toggle_open?"close":"open")."\">&crarr;</a>\n";
+			}
+			$return .= "\n";
 
 			$sub_return = '';
-			foreach ($vars as $key => $val)
+			foreach ($rvar->getProperties() as $prop)
 			{
-				$sub_return .= static::format($key, $val, $level + 1);
+				$prop->isPublic() or $prop->setAccessible(true);
+				if ($prop->isPrivate())
+				{
+					$scope = 'private';
+				}
+				elseif ($prop->isProtected())
+				{
+					$scope = 'protected';
+				}
+				else
+				{
+					$scope = 'public';
+				}
+				if (static::$max_nesting_level <= $level)
+				{
+					$sub_return .= str_repeat($indent_char, $level + 1)."...\n";
+				}
+				else
+				{
+					$sub_return .= static::format($prop->name, $prop->getValue($var), $level + 1, $indent_char, $scope);
+				}
 			}
 
 			if (count($vars) > 0)
 			{
-				$return .= "<span id=\"$id\" style=\"display: none;\">$sub_return</span>";
+				$return .= "<span id=\"$id\" style=\"display: ".(static::$js_toggle_open?"block":"none").";\">$sub_return</span>";
 			}
 			else
 			{
@@ -217,7 +296,7 @@ JS;
 		}
 		else
 		{
-			$return .= "<strong>{$name}</strong>: {$var}\n";
+			$return .= "<i>{$scope}</i> <strong>{$name}</strong>: {$var}\n";
 		}
 		return $return;
 	}
@@ -234,6 +313,12 @@ JS;
 	 */
 	public static function file_lines($filepath, $line_num, $highlight = true, $padding = 5)
 	{
+		// deal with eval'd code
+		if (strpos($filepath, 'eval()\'d code') !== false)
+		{
+			return '';
+		}
+
 		// We cache the entire file to reduce disk IO for multiple errors
 		if ( ! isset(static::$files[$filepath]))
 		{
@@ -348,7 +433,8 @@ JS;
 	 */
 	public static function headers()
 	{
-		return static::dump(getAllHeaders());
+		// get the current request headers and dump them
+		return static::dump(\Input::headers());
 	}
 
 	/**

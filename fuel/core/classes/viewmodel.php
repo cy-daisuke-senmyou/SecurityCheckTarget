@@ -3,10 +3,10 @@
  * Part of the Fuel framework.
  *
  * @package    Fuel
- * @version    1.0
+ * @version    1.6
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2012 Fuel Development Team
+ * @copyright  2010 - 2013 Fuel Development Team
  * @link       http://fuelphp.com
  */
 
@@ -30,20 +30,44 @@ abstract class ViewModel
 	 * @param   string  Method to execute
 	 * @return  ViewModel
 	 */
-	public static function forge($viewmodel, $method = 'view', $auto_filter = null)
+	public static function forge($view, $method = 'view', $auto_filter = null)
 	{
-		$namespace = \Request::active() ? ucfirst(\Request::active()->module) : '';
-		$class = $namespace.'\\View_'.ucfirst(str_replace(array('/', DS), '_', $viewmodel));
+		// strip any extensions from the view name to determine the viewmodel to load
+		$viewmodel = \Inflector::words_to_upper(str_replace(
+			array('/', DS),
+			'_',
+			strpos($view, '.') === false ? $view : substr($view, 0, -strlen(strrchr($view, '.')))
+		));
 
-		if ( ! class_exists($class))
+		// determine the viewmodel namespace from the current request context
+		$namespace = \Request::active() ? ucfirst(\Request::active()->module) : '';
+
+		// list of possible viewmodel classnames, start with the namespaced one
+		$classes = array($namespace.'\\View_'.$viewmodel);
+
+		// add the global version if needed
+		empty($namespace) or $classes[] = 'View_'.$viewmodel;
+
+		/**
+		 * Add non View_ prefixed classnames to the list, for BC reasons
+		 *
+		 * @deprecated 1.6
+		 */
+		$classes[] = $namespace.'\\'.$viewmodel;
+
+		// and add the global version of that if needed
+		empty($namespace) or $classes[] = $viewmodel;
+
+		// check if we can find one
+		foreach ($classes as $class)
 		{
-			if ( ! class_exists($class = $viewmodel))
+			if (class_exists($class))
 			{
-				throw new \OutOfBoundsException('ViewModel "View_'.ucfirst(str_replace(array('/', DS), '_', $viewmodel)).'" could not be found.');
+				return new $class($method, $auto_filter, $view);
 			}
 		}
 
-		return new $class($method, $auto_filter);
+		throw new \OutOfBoundsException('ViewModel "'.reset($classes).'" could not be found.');
 	}
 
 	/**
@@ -66,9 +90,10 @@ abstract class ViewModel
 	 */
 	protected $_active_request;
 
-	protected function __construct($method, $auto_filter = null)
+	protected function __construct($method, $auto_filter = null, $view = null)
 	{
 		$this->_auto_filter = $auto_filter;
+		$this->_view === null and $this->_view = $view;
 		class_exists('Request', false) and $this->_active_request = \Request::active();
 
 		if (empty($this->_view))
@@ -81,14 +106,20 @@ abstract class ViewModel
 		$this->set_view();
 
 		$this->_method = $method;
-
-		$this->before();
 	}
 
 	/**
-	 * Must return a View object or something compatible
+	 * Returns the View object associated with this Viewmodel
 	 *
-	 * @return  Object  any object on which the template vars can be set and which has a toString method
+	 * @return  View
+	 */
+	public function get_view()
+	{
+		return $this->_view;
+	}
+
+	/**
+	 * Construct the View object
 	 */
 	protected function set_view()
 	{
@@ -136,7 +167,7 @@ abstract class ViewModel
 	 *
 	 * @param  string
 	 */
-	public function & get($key, $default = null)
+	public function & get($key = null, $default = null)
 	{
 		if (is_null($default) and func_num_args() === 1)
 		{
@@ -232,6 +263,7 @@ abstract class ViewModel
 			Request::active($this->_active_request);
 		}
 
+		$this->before();
 		$this->{$this->_method}();
 		$this->after();
 
